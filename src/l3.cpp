@@ -1,4 +1,6 @@
 ﻿#include "master.h"
+#include "l3.h"
+#include "l2.h"
 
 #define BC_ENTER "\E(0"
 #define BC_EXIT "\E(B"
@@ -148,8 +150,6 @@ int bc_box(int x1, int y1, int x2, int y2)
 int bc_printbigchar(int *big, int x, int y, enum colors clr1, enum colors clr2)
 {
     mt_gotoXY(x, y);
-    mt_setbgcolor(clr1);
-    mt_setfgcolor(clr2);
 
     int bit;
     for (int i = 0; i < 8; i++)
@@ -159,10 +159,14 @@ int bc_printbigchar(int *big, int x, int y, enum colors clr1, enum colors clr2)
             bit = (big[i >> 2] >> ((i % 4) * 8 + j)) & 0x1;
             if (bit)
             {
-                printf("0");
+                mt_setbgcolor(clr2);
+                mt_setfgcolor(clr1);
+                printf(" ");
             }
             else
             {
+                mt_setbgcolor(clr1);
+                mt_setfgcolor(clr2);
                 printf(" ");
             }
         }

@@ -1,54 +1,8 @@
 #include "master.h"
-
-#define OB 1 //out of bounds
-#define NM 2 //not enough memory
-#define EC 3 //no such command
-
-#define N 100 //allocated memory
-
-enum COMMANDS
-{
-    READ = 10,
-    WRITE = 11,
-    LOAD = 20,
-    STORE = 21,
-    ADD = 30,
-    SUB = 31,
-    DIVIDE = 32,
-    MUL = 33,
-    JUMP = 40,
-    JNEG = 41,
-    JZ = 42,
-    HALT = 43,
-    NOT = 51,
-    AND = 52,
-    OR = 53,
-    XOR = 54,
-    JNS = 55,
-    JC = 56,
-    JNC = 57,
-    CHL = 60,
-    SHR = 61,
-    RCL = 62,
-    RCR = 63,
-    NEG = 64,
-    ADDC = 65,
-    SUBC = 66,
-    LOGLC = 67,
-    LOGRC = 68,
-    RCCL = 69,
-    RCCR = 70,
-    MOVA = 71,
-    MOVR = 72,
-    MOVCA = 73,
-    MOVCR = 74,
-    ADDCE = 75,
-    SUBCE = 76
-};
+#include "l1.h"
 
 int *sc_memory;
 char flags;
-int t;
 
 int sc_regInit(void)
 {
@@ -77,11 +31,8 @@ int sc_regGet(int reg, int *value)
 {
     if ((reg > 7) || (reg < 1))
     {
-        if (value)
-        {
-            *value = (flags >> (reg - 1)) & 1;
-            return 0;
-        }
+        *value = (flags >> (reg - 1)) & 1;
+        return 0;
     }
     return 1;
 }

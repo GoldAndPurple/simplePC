@@ -8,7 +8,7 @@ FILES =  $(wildcard $(SRC)*.cpp)
 TEMP = $(FILES:.cpp=.o)
 OBJECTS = $(patsubst $(SRC)%,$(OBJ)%,$(TEMP))
 
-CFLAGS = -Werror
+CFLAGS = -fpermissive
 IFLAGS = -I$(INC)
 
 .PHONY: clear folders
@@ -17,7 +17,7 @@ all: $(OUT)
 clear:
 		rm -f -r $(OBJ) $(BIN)
 folders:
-		mkdir bin obj
+		mkdir obj
 
 $(OUT): $(OBJECTS)
 		g++ $(CFLAGS) $^ -o $@
