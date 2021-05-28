@@ -4,6 +4,7 @@
 #include "l3.h"
 #include "l4.h"
 #include "gui.h"
+#include "lang.h"
 
 int main(void)
 {
@@ -23,24 +24,25 @@ int main(void)
     while (key != keys::QUIT)
     {
         mt_clrscr();
-        console();
-        if (sc_regGet(IC, &value))
+        print_gui();
+        sc_regGet(IC, &value);
+        if (value)
         {
             rk_readkey(&key);
             switch (key)
             {
             case keys::SAVE:
-                printf("Input filename\n");
+                printf("SAVE: Input filename\n");
                 scanf("%s", &f);
                 sc_memorySave(&f);
                 break;
             case keys::LOAD:
-                printf("Input filename\n");
+                printf("LOAD: Input filename\n");
                 scanf("%s", &f);
                 sc_memoryLoad(&f);
                 break;
             case keys::F5:
-                printf("Input buffer value\n");
+                printf("Input accumulator value\n");
                 scanf("%d", &acc);
                 if (acc > 0x7FFF)
                 {
@@ -62,7 +64,7 @@ int main(void)
                 else
                 {
                     sc_regSet(NM, 0);
-                    inst_counter = inst;
+                    counter = inst;
                 }
                 break;
             case keys::UP:
@@ -114,7 +116,7 @@ int main(void)
                     {
                         sc_memorySet(cursor, code);
                     }
-                } /*
+                }
                 else if (z == 2)
                 {
                     printf("Input filename\n");
@@ -126,10 +128,10 @@ int main(void)
                     printf("Input filename\n");
                     scanf("%s", &t);
                     translate(&t);
-                }*/
+                }
                 break;
             case keys::STEP:
-                cu();
+                CU();
                 break;
             case keys::RESET:
                 raise(SIGUSR1);

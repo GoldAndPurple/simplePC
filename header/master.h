@@ -16,13 +16,13 @@
 #define N 100 //allocated memory
 
 #define OB 1 //out of bounds
-#define NM 2 //not enough memory
+#define ZR 2 //divide by zero
 #define EC 3 //no such command
 #define OF 4 //overflow
 #define IC 5 //ignore clock
-#define ZR 6 //divide by zero
+#define NM 6 //not enough memory
 
-enum class commands
+enum class coms
 {
     READ = 10,
     WRITE = 11,
@@ -36,30 +36,7 @@ enum class commands
     JNEG = 41,
     JZ = 42,
     HALT = 43,
-    NOT = 51,
-    AND = 52,
-    OR = 53,
-    XOR = 54,
-    JNS = 55,
-    JC = 56,
-    JNC = 57,
-    CHL = 60,
-    SHR = 61,
-    RCL = 62,
-    RCR = 63,
-    NEG = 64,
-    ADDC = 65,
-    SUBC = 66,
-    LOGLC = 67,
-    LOGRC = 68,
-    RCCL = 69,
-    RCCR = 70,
-    MOVA = 71,
     MOVR = 72,
-    MOVCA = 73,
-    MOVCR = 74,
-    ADDCE = 75,
-    SUBCE = 76
 };
 enum class colors
 {

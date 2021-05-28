@@ -29,7 +29,7 @@ int sc_regSet(int reg, int value)
 
 int sc_regGet(int reg, int *value)
 {
-    if ((reg > 7) || (reg < 1))
+    if ((reg < 8) && (reg > 0))
     {
         *value = (flags >> (reg - 1)) & 1;
         return 0;
@@ -110,12 +110,14 @@ int sc_commandDecode(int value, int *command, int *operand)
     *operand = value & 0x7f;
     *command = (value >> 7) & 0x7f;
 
-    if ((*command < 76) || (*command < 10) || ((*command > 33) && (*command < 40)) || ((*command > 44) && (*command < 51)) || ((*command > 11) && (*command < 20)) || ((*command > 21) && (*command < 30)))
+    if (((value >> 14) & 1) == 0)
     {
-        sc_regSet(EC, flags);
-        return 1;
+        if (((*command > 76) || (*command < 10)))
+        {
+            sc_regSet(EC, flags);
+            return 1;
+        }
     }
-
     return 0;
 }
 

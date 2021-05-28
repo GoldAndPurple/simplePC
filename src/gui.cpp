@@ -7,189 +7,186 @@
 
 enum keys key;
 struct itimerval nval;
-int accumulator;
-int inst_counter;
+int accumulator = 0;
+int counter = 0;
 int com;
 int op;
-int cursor;
-int temp;
+int cursor = 0;
+int temp = 0;
 
-int alu(int command, int operand)
+int ALU(int command, int operand)
 {
     int value;
 
     sc_memoryGet(operand, &value);
     switch (command)
     {
-    case 0x1E:
+    case 30:
         //printf("ADD\n");
-        if ((0x7FFF - accumulator) < value)
+        if (9999 < value + accumulator)
         {
             sc_regSet(OF, 1);
             sc_regSet(IC, 1);
-            cursor = inst_counter = 0;
+            cursor = counter = 0;
             break;
         }
         else
         {
             accumulator += value;
-            inst_counter++;
+            counter++;
         }
         break;
-    case 0x1F:
+    case 31:
         //printf("SUB\n");
         accumulator -= value;
-        inst_counter++;
+        counter++;
         break;
-    case 0x20:
+    case 32:
         //printf("DIVIDE\n");
         if (value == 0)
         {
             sc_regSet(ZR, 1);
             sc_regSet(IC, 1);
-            cursor = inst_counter = 0;
+            cursor = counter = 0;
             break;
         }
         else
         {
             accumulator /= value;
-            inst_counter++;
+            counter++;
         }
         break;
-    case 0x21:
+    case 33:
         //printf("MUL\n");
-        if ((0x777F / accumulator + 1) < value)
+        if ((9999 / accumulator + 1) < value)
         {
             sc_regSet(OF, 1);
             sc_regSet(IC, 1);
-            cursor = inst_counter = 0;
+            cursor = counter = 0;
             break;
         }
         else
         {
             accumulator *= value;
-            inst_counter++;
+            counter++;
         }
         break;
     }
     return 0;
 }
 
-int cu()
+int CU()
 {
     int value = 0;
-    int result;
 
-    sc_memoryGet(inst_counter, &value);
-    result = sc_commandDecode(value, &com, &op);
+    sc_memoryGet(counter, &value);
 
-    if (result != 0)
+    if (sc_commandDecode(value, &com, &op))
     {
-        sc_regSet(EC, 1);
         return -1;
     }
     else
     {
-        if ((com == 0x1E) || (com == 0x1F) || (com == 0x20) || (com == 0x21))
+        if ((com >= 30) && (com <= 33))
         {
-            alu(com, op);
+            sc_regSet(EC, 0);
+            ALU(com, op);
         }
         else
         {
-            switch (com)
+            sc_regSet(EC, 0);
+            enum coms command = (coms)com;
+            switch (command)
             {
-                int x, y;
-            case 0xA:
-                printf("READ\n");
-                scanf("%d", &y);
-                if (y > 0x7FFF)
+                int t;
+            case coms::READ:
+                printf("READ:\n");
+                scanf("%d", &t);
+                if (t > 9999)
                 {
                     sc_regSet(OF, 1);
                     sc_regSet(IC, 1);
-                    cursor = inst_counter = 0;
+                    cursor = counter = 0;
                 }
                 else
                 {
-                    sc_memorySet(op, y);
-                    inst_counter++;
+                    sc_memorySet(op, t);
+                    counter++;
                 }
                 break;
-            case 0xB:
-                printf("WRITE\n");
-                sc_memoryGet(op, &y);
-                printf("\n%d", y);
-                inst_counter++;
+            case coms::WRITE:
+                sc_memoryGet(op, &t);
+                printf("\n%d", t);
+                counter++;
                 break;
-            case 0x14:
-                printf("LOAD\n");
-                sc_memoryGet(op, &y);
-                accumulator = y;
-                inst_counter++;
+            case coms::LOAD:
+                sc_memoryGet(op, &t);
+                accumulator = t;
+                counter++;
                 break;
-            case 0x15:
-                printf("STORE\n");
+            case coms::STORE:
                 sc_memorySet(op, accumulator);
-                inst_counter++;
+                counter++;
                 break;
-            case 0x28:
-                printf("JUMP\n");
-                inst_counter = op;
+            case coms::JUMP:
+                counter = op;
                 break;
-            case 0x29:
-                printf("JNEG\n");
+            case coms::JNEG:
                 if (accumulator < 0)
                 {
-                    inst_counter = op;
+                    counter = op;
                 }
                 else
                 {
-                    inst_counter++;
+                    counter++;
                 }
                 break;
-            case 0x2A:
-                printf("JZ\n");
+            case coms::JZ:
                 if (accumulator == 0)
                 {
-                    inst_counter = op;
+                    counter = op;
                 }
                 else
                 {
-                    inst_counter++;
+                    counter++;
                 }
                 break;
-            case 0x2B:
-                printf("HALT\n");
+            case coms::HALT:
                 sc_regSet(IC, 1);
-                cursor = inst_counter = 0;
                 break;
-            case 0x40:
-                printf("NEG\n");
-                sc_memoryGet(op, &y);
-                accumulator = -y;
-                inst_counter++;
+            case coms::MOVR:
+                sc_memoryGet(accumulator, &t);
+                sc_memorySet(op, t);
                 break;
-            case 0x42:
-                printf("SUBC\n");
-                sc_memoryGet(op, &x);
-                sc_memoryGet(accumulator, &y);
-                accumulator = (x - y);
-                inst_counter++;
-                break;
-            case 0x47:
-                printf("SUBC\n");
-                sc_memoryGet(op, &x);
-                sc_memorySet(accumulator, x);
-                inst_counter++;
+            default:
+                sc_regSet(EC, 1);
+                sc_regSet(IC, 1);
                 break;
             }
         }
 
         return 0;
     }
+    return 0;
 }
 
-void memoryShow()
+void print_memory()
 {
+    mt_gotoXY(2, 28);
+    printf("memory");
+    mt_gotoXY(2, 65);
+    printf("accumulator");
+    mt_gotoXY(3, 65);
+    printf("+%04d", accumulator);
+    mt_gotoXY(5, 65);
+    printf("instructionCounter");
+    mt_gotoXY(6, 65);
+    printf("+%04d", counter);
+    mt_gotoXY(8, 65);
+    printf("operation");
+    mt_gotoXY(9, 65);
+    printf("+%02d : %02d", com, op);
+
     for (int i = 0; i < N; i++)
     {
         if (i == cursor)
@@ -207,33 +204,22 @@ void memoryShow()
             mt_gotoXY((i / 10) + 3, 2);
         }
         sc_memoryGet(i, &temp);
-        printf("+%04X ", temp);
+        if (temp < 0)
+        {
+            printf("%05d ", temp);
+        }
+        else
+        {
+            printf("+%04d ", temp);
+        }
     }
 }
 
-void CPUshow()
-{
-    mt_gotoXY(2, 28);
-    printf("memory");
-    mt_gotoXY(2, 65);
-    printf("accumulator");
-    mt_gotoXY(3, 65);
-    printf("+%04X", accumulator);
-    mt_gotoXY(5, 65);
-    printf("instructionCounter");
-    mt_gotoXY(6, 65);
-    printf("+%04X", inst_counter);
-    mt_gotoXY(8, 65);
-    printf("operation");
-    mt_gotoXY(9, 65);
-    printf("+%02d : %02d", com, op);
-}
-
-void flagShow()
+void print_flags()
 {
     int fl = 0;
     mt_gotoXY(11, 65);
-    printf("flags %d", flags);
+    printf("flags");
     mt_gotoXY(12, 65);
     sc_regGet(OF, &fl);
     if (fl)
@@ -282,10 +268,10 @@ void flagShow()
     }
 }
 
-void keysShow()
+void print_keywords()
 {
     mt_gotoXY(14, 56);
-    printf("Keys:");
+    printf("keys:");
     mt_gotoXY(15, 56);
     printf("l - load");
     mt_gotoXY(16, 56);
@@ -300,9 +286,11 @@ void keysShow()
     printf("f5 - accumulator");
     mt_gotoXY(21, 56);
     printf("f6 - instructionCounter");
+    mt_gotoXY(22, 56);
+    printf("q - quit");
 }
 
-void printBoxes()
+void print_frames()
 {
     bc_box(2, 1, 11, 60);
     bc_box(2, 63, 2, 20);
@@ -313,37 +301,36 @@ void printBoxes()
     bc_box(14, 55, 9, 28);
 }
 
-void printBigChars()
+void print_current_inst()
 {
     int value;
     int bigchar[2];
     char char_symbol[8];
 
-    sc_memoryGet(inst_counter, &value);
-    if (value >> 14)
+    sc_memoryGet(cursor, &value);
+    if (value < 0)
     {
-        sprintf(char_symbol, "-%04X", value);
+        sprintf(char_symbol, "%05d", value);
     }
     else
     {
-        sprintf(char_symbol, "+%04X", value);
+        sprintf(char_symbol, "+%04d", value);
     }
 
     for (int i = 0; i < 5; i++)
     {
         bc_initbigchar(bigchar, char_symbol[i]);
-        bc_printbigchar(bigchar, 15, 6 + (i * 9), colors::white, colors::def);
+        bc_printbigchar(bigchar, 15, 6 + (i * 9), colors::black, colors::white);
     }
 }
 
-void console()
+void print_gui()
 {
-    printBoxes();
-    keysShow();
-    flagShow();
-    CPUshow();
-    memoryShow();
-    printBigChars();
+    print_frames();
+    print_keywords();
+    print_flags();
+    print_memory();
+    print_current_inst();
     printf("\nInput/Output\n");
 }
 
@@ -351,28 +338,28 @@ void settimer(struct itimerval *nval)
 {
     nval->it_interval.tv_sec = 0;
     nval->it_interval.tv_usec = 0;
-    nval->it_value.tv_sec = 0;
-    nval->it_value.tv_usec = 100000;
+    nval->it_value.tv_sec = 1;
+    nval->it_value.tv_usec = 0;
 }
 
-void timer()
+void timer(int sig)
 {
-    if (cu() == -1)
+    if (CU() == -1)
     {
         sc_regSet(IC, 1);
-        cursor = inst_counter = 0;
+        cursor = counter = 0;
     }
     else
     {
-        console();
-        cursor = inst_counter;
+        print_gui();
+        cursor = counter;
     }
 }
 
-void reset()
+void reset(int sig)
 {
     sc_memoryInit();
     sc_regInit();
     sc_regSet(IC, 1);
-    cursor = inst_counter = accumulator = 0;
+    cursor = counter = accumulator = 0;
 }
