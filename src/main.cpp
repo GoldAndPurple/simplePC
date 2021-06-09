@@ -44,7 +44,7 @@ int main(void)
             case keys::F5:
                 printf("Input accumulator value\n");
                 scanf("%d", &acc);
-                if (acc > 0x7FFF)
+                if (acc > 9999)
                 {
                     sc_regSet(OF, 1);
                 }
@@ -96,8 +96,8 @@ int main(void)
                 }
                 break;
             case keys::RUN:
-                sc_regInit();
                 cursor = 0;
+                sc_regInit();
                 break;
             case keys::ENTER:
                 printf("1 - Manual\n2 - Basic\n3 - Assembler\n");
@@ -131,7 +131,9 @@ int main(void)
                 }
                 break;
             case keys::STEP:
+                counter = cursor;
                 CU();
+                cursor = counter;
                 break;
             case keys::RESET:
                 raise(SIGUSR1);

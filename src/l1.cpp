@@ -112,7 +112,7 @@ int sc_commandDecode(int value, int *command, int *operand)
 
     if (((value >> 14) & 1) == 0)
     {
-        if (((*command > 76) || (*command < 10)))
+        if (((*command > 90) || (*command < 10)))
         {
             sc_regSet(EC, flags);
             return 1;

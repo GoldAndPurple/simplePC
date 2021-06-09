@@ -1,464 +1,450 @@
-#include "master.h"
+#include <iostream>
+#include <fstream>
+#include <stack>
+#include <vector>
+#include <cstdlib>
+#include <string>
+#include <sstream>
+using namespace std;
 
-void command_decode(const char *command);
+vector<int> basic_line;
+vector<int> asm_line;
 
-FILE *fin = NULL;
-FILE *output = NULL;
-
-char *vars;
-
-int asm_cnt = 0,        // счётчик для асм-инструкций
-    bas_cnt = 1,        // тож, ток для басика
-    tmp_cnt = 0,        // счётчик временных переменных (константы)
-        *count_cnt = 0, // массив позиций (индекс - позиция в басике, значение - позиция в асме)
-            *var_value = 0;
-
-const char command_id[][7] = {"REM", "INPUT", "PRINT", "GOTO", "IF", "LET", "END"};
-
-void load_file(const char *filename)
+int preced(char ch)
 {
-    if ((fin = fopen(filename, "r")) == NULL)
-    {
-        fprintf(stderr, "Cannot open file: no such file\n");
-        exit(EXIT_FAILURE);
-    }
-    return;
+	if (ch == '+' || ch == '-')
+	{
+		return 1; //Precedence of + or - is 1
+	}
+	else if (ch == '*' || ch == '/')
+	{
+		return 2; //Precedence of * or / is 2
+	}
+	else
+	{
+		return 0;
+	}
 }
 
-int check_var(char *var, char var_tmp)
+string inToPost(string infix)
 {
-    int is_var = 0;
-    for (int i = 0; i < (int)strlen(var); i++)
-    {
-        if (var_tmp == var[i])
-        {
-            is_var++;
-            break;
-        }
-    }
-    return is_var;
+	stack<char> stk;
+	stk.push('#');		 //add some extra character to avoid underflow
+	string postfix = ""; //initially the postfix string is empty
+	string::iterator it;
+
+	for (it = infix.begin(); it != infix.end(); it++)
+	{
+		if (isalnum(char(*it)))
+			postfix += *it; //add to postfix when character is letter or number
+		else if (*it == '(')
+			stk.push('(');
+		else if (*it == '^')
+			stk.push('^');
+		else if (*it == ')')
+		{
+			while (stk.top() != '#' && stk.top() != '(')
+			{
+				postfix += stk.top(); //store and pop until ( has found
+				stk.pop();
+			}
+			stk.pop(); //remove the '(' from stack
+		}
+		else
+		{
+			if (preced(*it) > preced(stk.top()))
+				stk.push(*it); //push if precedence is high
+			else
+			{
+				while (stk.top() != '#' && preced(*it) <= preced(stk.top()))
+				{
+					postfix += stk.top(); //store and pop until higher precedence is found
+					stk.pop();
+				}
+				stk.push(*it);
+			}
+		}
+	}
+
+	while (stk.top() != '#')
+	{
+		postfix += stk.top(); //store and pop until stack is not empty.
+		stk.pop();
+	}
+
+	return postfix;
 }
 
-void add_var(char *vars, char var_tmp)
+/* trees */
+
+// Data structure to store a binary tree node
+struct Node
 {
-    char tmp[] = {var_tmp, '\0'};
-    vars = strcat(vars, tmp);
+	char data;
+	int loc;
+	Node *left, *right;
+
+	Node(int data)
+	{
+		this->data = data;
+		this->left = this->right = nullptr;
+	};
+
+	Node(int data, Node *left, Node *right)
+	{
+		this->data = data;
+		this->left = left;
+		this->right = right;
+	};
+};
+
+// Function to check if a given token is an operator
+bool isOperator(char c)
+{
+	return (c == '+' || c == '-' || c == '*' || c == '/');
 }
 
-char add_tmpvar(char *vars, int val)
+// Print the postfix expression for an expression tree
+void postorder(Node *root)
 {
-    char new_var = 'z' - tmp_cnt;
-    tmp_cnt++;
-    add_var(vars, new_var);
-    var_value[strlen(vars) - 1] = val;
-    return new_var;
+	if (root == nullptr)
+	{
+		return;
+	}
+
+	postorder(root->left);
+	postorder(root->right);
+	cout << root->data;
 }
 
-int get_var_pos(char *vars, char var)
+int avilable_mem(int &a)
 {
-    int cnt = 0;
-    for (int i = 0; i < (int)strlen(vars); i++, cnt++)
-    {
-        if (var == vars[i])
-            break;
-    }
-    return 99 - cnt;
+	int t = a;
+	for (int i = 0; i < 32; i++)
+	{
+		if (!((t >> i) & 1))
+		{
+			a |= (1 << i);
+			return i; //72 and below for temp constants
+		}
+	}
+	return 72;
 }
 
-void add_cmd(const char *cmd, int operand)
+// CONST sets 99 to operand
+void expr_traversal(Node *root, int &line, int &mem, string &as)
 {
-    if (!strcmp(cmd, "JNEG") || !strcmp(cmd, "JUMP"))
-        fprintf(output, "%d %s !%d\n", asm_cnt, cmd, operand);
-    else
-        fprintf(output, "%d %s %d\n", asm_cnt, cmd, operand);
-    asm_cnt++;
+	if (root == nullptr)
+	{
+		return;
+	}
+	expr_traversal(root->left, line, mem, as);
+	expr_traversal(root->right, line, mem, as);
+
+	if (isdigit(root->data))
+	{
+		root->loc = 99;
+		return;
+	}
+	else if (isalpha(root->data))
+	{
+		root->loc = 163 - (int)root->data;
+		return;
+	}
+	else if (isOperator(root->data))
+	{
+		if (isdigit(root->left->data))
+		{
+			as.append(to_string(line));
+			as.append(" CONST ");
+			as.append(to_string(root->left->data - 48));
+			as.append("\n");
+			line++;
+		}
+
+		as.append(to_string(line));
+		as.append(" LOAD ");
+		as.append(to_string(root->left->loc));
+		as.append("\n");
+		line++;
+
+		if (isdigit(root->right->data))
+		{
+			as.append(to_string(line));
+			as.append(" CONST ");
+			as.append(to_string(root->right->data - 48));
+			as.append("\n");
+			line++;
+		}
+
+		as.append(to_string(line));
+		if (root->data == '+')
+		{
+			as.append(" ADD ");
+		}
+		else if (root->data == '-')
+		{
+			as.append(" SUB ");
+		}
+		else if (root->data == '*')
+		{
+			as.append(" MUL ");
+		}
+		else if (root->data == '/')
+		{
+			as.append(" DIVIDE ");
+		}
+		as.append(to_string(root->right->loc));
+		as.append("\n");
+		line++;
+		root->loc = 72 - avilable_mem(mem);
+		as.append(to_string(line));
+		as.append(" STORE ");
+		as.append(to_string(root->loc));
+		as.append("\n");
+		line++;
+	}
 }
 
-void add_accum(char var)
+// Function to construct an expression tree from the given postfix expression
+Node *construct(string postfix)
 {
-    int pos = get_var_pos(vars, var);
-    add_cmd("LOAD", pos);
+	// create an empty stack to store tree pointers
+	stack<Node *> s;
+
+	// traverse the postfix expression
+	for (char c : postfix)
+	{
+		// if the current token is an operator
+		if (isOperator(c))
+		{
+			// pop two nodes `x` and `y` from the stack
+			Node *x = s.top();
+			s.pop();
+
+			Node *y = s.top();
+			s.pop();
+
+			// construct a new binary tree whose root is the operator and whose
+			// left and right children point to `y` and `x`, respectively
+			Node *node = new Node(c, y, x);
+
+			// push the current node into the stack
+			s.push(node);
+		}
+
+		// if the current token is an operand, create a new binary tree node
+		// whose root is the operand and push it into the stack
+		else
+		{
+			s.push(new Node(c));
+		}
+	}
+
+	// a pointer to the root of the expression tree remains on the stack
+	return s.top();
 }
 
-void stack_pull(char *res, char *stack, int i)
+//result of expression in accumulator
+string parse_expr(string e, int &current_line)
 {
-    char sign[] = {stack[i], '\0'};
-    stack[i] = '\0';
-    strcat(res, sign);
+	string postfix = inToPost(e);
+	Node *root = construct(postfix);
+	int a = 0;
+	string ass;
+	expr_traversal(root, current_line, a, ass);
+	if (root->loc == 99)
+	{
+		ass.append(to_string(current_line++) + " CONST " + to_string(root->data - 48) + "\n");
+	}
+	ass.append(to_string(current_line) + " LOAD " + to_string(root->loc) + "\n");
+
+	int count = 1;
+	for (int i = 0; i < ass.length(); i++)
+	{
+		if (ass[i] == '\n')
+			count++;
+	}
+	asm_line.push_back(count);
+	return ass;
 }
 
-char *epx_to_rpn(char *exp)
+void find_and_replace(string &file_contents,
+					  const string &from, const string &to)
 {
-    char *res = (char *)calloc(100, sizeof(*res));
-    char *stack = (char *)calloc(100, sizeof(*res));
-    char *tmp = strtok(exp, " =\n");
-    while (tmp != NULL)
-    {
-
-        if (check_var(vars, tmp[0]))
-            strcat(res, &tmp[0]);
-
-        else if (tmp[0] == '+' || tmp[0] == '-' || tmp[0] == '*' || tmp[0] == '/' || tmp[0] == '(' || tmp[0] == ')')
-        {
-
-            for (int i = strlen(stack) - 1; i >= 0; i--)
-            {
-                if (stack[i] == '(')
-                    break;
-
-                if (tmp[0] == '+' || tmp[0] == '-')
-                {
-                    if (stack[i] == '*' || stack[i] == '/' ||
-                        stack[i] == '+' || stack[i] == '-')
-                        stack_pull(res, stack, i);
-                }
-
-                else if (tmp[0] == '*' || tmp[0] == '/')
-                {
-                    if (stack[i] == '*' || stack[i] == '/')
-                        stack_pull(res, stack, i);
-                }
-
-                else if (tmp[0] == ')')
-                {
-                    for (int j = strlen(stack) - 1; j >= 0; j--)
-                    {
-                        if (stack[j] == '(')
-                        {
-                            stack[j] = '\0';
-                            tmp[0] = '\0';
-                            break;
-                        }
-                        stack_pull(res, stack, j);
-                    }
-                }
-            }
-
-            strcat(stack, &tmp[0]);
-        }
-
-        else if (atoi(tmp) || tmp[0] == '0')
-        {
-            char new_var = add_tmpvar(vars, atoi(tmp));
-            char fix_var[] = {new_var, '\0'};
-            strcat(res, fix_var);
-        }
-        tmp = strtok(NULL, " =\n");
-    }
-    for (int i = strlen(stack) - 1; i >= 0; i--)
-        strcat(res, &stack[i]);
-    return res;
+	size_t pos = file_contents.find(from);
+	while (pos != string::npos)
+	{
+		file_contents.replace(pos, from.length(), to);
+		pos = file_contents.find(from, pos);
+	}
 }
 
-void calculating(char *rpn, char var)
+int main()
 {
-    char stack[100] = "\0";
-    int pos = 0, var_pos = 0,
-        flg = 0;
+	ifstream f("fact.bas");
+	fstream of("tmp.sa");
+	string token, line;
+	vector<string> lines;
+	while (getline(f, line, '\n'))
+	{
+		lines.push_back(line);
+	}
 
-    for (int i = 0; rpn[i]; i++)
-    {
-        if (pos > 1 && rpn[i] < 'A')
-        {
+	vector<string> syn;
+	int current_line = 0;
+	string asm_com;
+	int asm_op;
+	int asm_num;
+	for (int i = 0; i < lines.size() - 1; i++)
+	{
+		//cout << lines[i] << "\n";
+		syn.clear();
+		stringstream ss(lines[i]);
+		while (getline(ss, token, ' '))
+		{
+			syn.push_back(token);
+		}
+		basic_line.push_back(stoi(syn[0]));
+		if (!syn[1].compare("REM"))
+		{
+			continue;
+		}
+		else if (!syn[1].compare("INPUT"))
+		{
+			asm_com = "READ";
+			asm_op = 163 - syn[2][0];
+			asm_line.push_back(1);
+		}
+		else if (!syn[1].compare("OUTPUT"))
+		{
+			asm_com = "WRITE";
+			asm_op = 163 - syn[2][0];
+			asm_line.push_back(1);
+		}
+		else if (!syn[1].compare("GOTO"))
+		{
+			asm_com = "JMPX";
+			asm_op = stoi(syn[2]);
+			asm_line.push_back(1);
+		}
+		else if (!syn[1].compare("IF")) //jump if condition is false - skip following THEN statement
+		{
+			if (!syn[3].compare("="))
+			{
+				of << parse_expr(syn[2] + '-' + syn[4], current_line);
+				current_line++;
+				asm_com = "JNZ";
+			}
+			else if (!syn[3].compare("<"))
+			{
+				of << parse_expr(syn[4] + '-' + syn[2], current_line);
+				current_line++;
+				asm_com = "JNEG";
+			}
+			else if (!syn[3].compare(">"))
+			{
+				of << parse_expr(syn[2] + '-' + syn[4], current_line);
+				current_line++;
+				asm_com = "JNEG";
+			}
+			else
+			{
+				return 1;
+			}
+			asm_num = current_line++;
+			asm_op = current_line + 1; //unless LET
 
-            add_accum(stack[pos - 2]);
-            if (!flg)
-            {
-                var_pos = get_var_pos(vars, stack[pos - 1]);
-                flg++;
-            }
-            else
-                var_pos = get_var_pos(vars, var);
+			string then_statement(to_string(current_line));
+			//repeat of other statements
+			if (!syn[5].compare("REM"))
+			{
+				continue;
+			}
+			else if (!syn[5].compare("INPUT"))
+			{
+				then_statement.append(" READ " + to_string(163 - syn[6][0]));
+			}
+			else if (!syn[5].compare("OUTPUT"))
+			{
+				then_statement.append(" WRITE " + to_string(163 - syn[6][0]));
+			}
+			else if (!syn[5].compare("GOTO"))
+			{
+				then_statement.append(" JMPX " + to_string(stoi(syn[6])));
+			}
+			else if (!syn[5].compare("LET"))
+			{
+				current_line++;
+				then_statement = parse_expr(syn[8], current_line);
 
-            if (rpn[i] == '+')
-                add_cmd("ADD", var_pos);
+				current_line++;
+				then_statement.append(to_string(current_line) + " STORE " + to_string((163 - syn[6][0])));
+				asm_num = current_line + asm_line.back() + 2;
+				continue;
+			}
+			else if (!syn[5].compare("END"))
+			{
+				then_statement.append(" HALT");
+			}
+			else
+			{
+				return 1;
+			}
+			of << asm_num << " " << asm_com << " " << asm_op << "\n";
+			of << then_statement << "\n";
 
-            else if (rpn[i] == '-')
-                add_cmd("SUB", var_pos);
+			current_line++;
+			asm_line.back() += 1;
+			continue;
+			//repeat end
+		}
+		else if (!syn[1].compare("LET"))
+		{
+			of << parse_expr(syn[4], current_line);
+			current_line++;
+			asm_com = "STORE";
+			asm_op = (163 - syn[2][0]);
+		}
+		else if (!syn[1].compare("END"))
+		{
+			asm_com = "HALT";
+		}
+		else
+		{
+			return 1;
+		}
+		asm_num = current_line;
+		of << asm_num << " " << asm_com << " " << asm_op << "\n";
 
-            else if (rpn[i] == '*')
-                add_cmd("MUL", var_pos);
+		current_line++;
+	}
 
-            else if (rpn[i] == '/')
-                add_cmd("DIVIDE", var_pos);
+	//goto fixup
 
-            var_pos = get_var_pos(vars, var);
-            add_cmd("STORE", var_pos);
-            pos--;
-        }
-        else
-        {
-            stack[pos] = rpn[i];
-            pos++;
-        }
-    }
-}
+	for (int i = 1; i < basic_line.size(); i++)
+	{
 
-void iff()
-{
-    char var_a,
-        var_b,
-        tmp_val[10], // на случай, если будет число
-        trsh,
-        sign;
-    fscanf(fin, "%c", &var_a);
-    fscanf(fin, "%c", &var_a);
-    if (var_a < 'A')
-    {
-        char tmp[] = {var_a, '\0'};
-        while (var_a != ' ')
-        {
-            strcat(tmp_val, tmp);
-            fscanf(fin, "%c", &var_a);
-            tmp[0] = var_a;
-        }
-        var_a = add_tmpvar(vars, atoi(tmp_val));
-    }
-    else
-        fscanf(fin, "%c", &sign);
+		asm_line[i] += asm_line[i - 1];
+	}
+	asm_line.insert(asm_line.begin(), 0);
 
-    fscanf(fin, "%c", &sign);
+	f.close();
+	of.clear();
+	of.seekg(0, of.beg);
 
-    fscanf(fin, "%c", &var_b);
-    fscanf(fin, "%c", &var_b);
-    if (var_b < 'A')
-    {
-        char tmp[] = {var_b, '\0'};
-        while (var_b != ' ')
-        {
-            strcat(tmp_val, tmp);
-            fscanf(fin, "%c", &var_b);
-            tmp[0] = var_b;
-        }
-        var_b = add_tmpvar(vars, atoi(tmp_val));
-    }
-    else
-        fscanf(fin, "%c", &trsh);
+	ofstream ans("fact.sa");
 
-    if (sign == '>')
-    {
-        int pos = get_var_pos(vars, var_a);
-        add_cmd("LOAD", pos);
+	lines.clear();
+	while (getline(of, line, '\n'))
+	{
+		for (int i = 0; i < basic_line.size(); i++)
+		{
+			find_and_replace(line, "JMPX " + to_string(basic_line[i]), "JUMP " + to_string(asm_line[i]));
+		}
+		ans << line << "\n";
+	}
 
-        pos = get_var_pos(vars, var_b);
-        add_cmd("SUB", pos);
-
-        add_cmd("JNEG", bas_cnt + 1);
-    }
-
-    else if (sign == '<')
-    {
-        int pos = get_var_pos(vars, var_b);
-        add_cmd("LOAD", pos);
-
-        pos = get_var_pos(vars, var_a);
-        add_cmd("SUB", pos);
-
-        add_cmd("JNEG", bas_cnt + 1);
-    }
-
-    else if (sign == '=')
-    {
-        int pos = get_var_pos(vars, var_a);
-        add_cmd("LOAD", pos);
-
-        pos = get_var_pos(vars, var_b);
-        add_cmd("SUB", pos);
-
-        add_cmd("JZ", asm_cnt + 2);
-
-        add_cmd("JUMP", bas_cnt + 1);
-    }
-
-    char command[10] = "\0";
-    fscanf(fin, "%s", command);
-    command_decode(command);
-}
-
-void rem()
-{
-    char tmp[255];
-    fgets(tmp, 254, fin);
-}
-
-void input()
-{
-    char var_tmp;
-    fscanf(fin, "%c", &var_tmp);
-    fscanf(fin, "%c", &var_tmp);
-    if (!check_var(vars, var_tmp))
-        add_var(vars, var_tmp);
-    int pos = get_var_pos(vars, var_tmp); // позиция для переменной в озу
-    add_cmd("READ", pos);
-}
-
-void print()
-{
-    char var_tmp;
-    fscanf(fin, "%c", &var_tmp);
-    fscanf(fin, "%c", &var_tmp);
-    if (!check_var(vars, var_tmp))
-    {
-        fprintf(stderr, "Error on line: %d. No such variable.\n", bas_cnt);
-        exit(EXIT_FAILURE);
-    }
-    int pos = get_var_pos(vars, var_tmp);
-    add_cmd("WRITE", pos);
-}
-
-void got()
-{
-    int goto_pos;
-    fscanf(fin, "%d", &goto_pos);
-    //goto_pos /= 10;
-    add_cmd("JUMP", count_cnt[goto_pos]);
-}
-
-void let()
-{
-    char var_tmp;
-    fscanf(fin, "%c", &var_tmp);
-    fscanf(fin, "%c", &var_tmp);
-    if (!check_var(vars, var_tmp))
-        add_var(vars, var_tmp);
-    char exp[255] = "\0";
-    fgets(exp, 254, fin);
-    char *rpn = epx_to_rpn(exp);
-    printf("%s\n", rpn);
-    if (strlen(rpn) != 1)
-    {
-        calculating(rpn, var_tmp);
-    }
-    else
-    {
-        int pos = get_var_pos(vars, rpn[0]);
-        add_cmd("LOAD", pos);
-        pos = get_var_pos(vars, var_tmp);
-        add_cmd("STORE", pos);
-    }
-}
-
-void end()
-{
-    add_cmd("HALT", 0);
-}
-
-void command_decode(const char *command)
-{
-    int j = 0;
-
-    for (j = 0; j < 7; j++)
-        if (!strcmp(command, command_id[j]))
-            break;
-
-    if (j == 0)
-        rem();
-    else if (j == 1)
-        input();
-    else if (j == 2)
-        print();
-    else if (j == 3)
-        got();
-    else if (j == 4)
-        iff();
-    else if (j == 5)
-        let();
-    else if (j == 6)
-        end();
-    else
-    {
-        fprintf(stderr, "Error on line: %d. Wrong command.\n", bas_cnt);
-        exit(EXIT_FAILURE);
-    }
-}
-
-void fix_goto()
-{
-    rename("./tmp.sa", "./tmp1.sa");
-    output = fopen("tmp.sa", "w");
-    FILE *filer = fopen("tmp1.sa", "r");
-    char mass[50] = "\0";
-    while (1)
-    {
-        fscanf(filer, "%s", mass);
-        if (feof(filer))
-            break;
-        if (mass[0] == '!')
-        {
-            for (int i = 0; i < (int)strlen(mass); i++)
-                mass[i] = mass[i + 1];
-            int temp = atoi(mass);
-            sprintf(mass, "%d", count_cnt[temp]);
-        }
-        char trsh;
-        fscanf(filer, "%c", &trsh);
-        fprintf(output, "%s%c", mass, trsh);
-    }
-    fclose(output);
-    fclose(filer);
-    system("rm tmp1.sa");
-}
-
-void translating(const char *filename)
-{
-    int cnt = 0; // счётчик инструкций
-    for (int i = 0;; i++)
-    {
-        char tmp[255];
-        fgets(tmp, 254, fin);
-        if (feof(fin))
-            break;
-        cnt++;
-    }
-
-    count_cnt = (int *)malloc(sizeof(*count_cnt) * (cnt + 1)); // индекс - номер строки, содержимое - начало счётчика инстр
-    vars = (char *)malloc(sizeof(*vars) * 50);
-    var_value = (int *)malloc(sizeof(*var_value) * 50);
-    for (int k = 0; k < 50; k++)
-        var_value[k] = 0;
-
-    rewind(fin);
-    output = fopen(filename, "w");
-    int i = 0;
-    for (i = 0; !feof(fin); i++)
-    {
-        int trsh; // муср
-        if (!fscanf(fin, "%d", &trsh))
-        {
-            fprintf(stderr, "Error on line: %d. Missing num of line (may be its %d?).\n", bas_cnt, bas_cnt);
-        }
-        char command[10];
-        fscanf(fin, "%s", command);
-        if (feof(fin))
-            break;
-
-        count_cnt[bas_cnt] = asm_cnt;
-
-        command_decode(command);
-
-        bas_cnt++;
-    }
-
-    for (int i = strlen(vars) - 1; i >= 0; i--)
-    {
-        int pos = get_var_pos(vars, vars[i]);
-        fprintf(output, "%d %d\n", pos, var_value[i]);
-    }
-
-    fclose(output);
-    fix_goto();
-}
-
-int main(int argc, const char **argv)
-{
-    if (argc < 3)
-    {
-        fprintf(stderr, "Usage: %s input.sb output.o\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-    load_file(argv[1]);
-    translating("tmp.sa");
-    system("./sat tmp.sa tmp");
-    rename("./tmp", argv[2]);
-    return 0;
+	ans.close();
+	return 0;
 }

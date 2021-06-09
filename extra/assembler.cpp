@@ -56,6 +56,10 @@ void translating(char *filename)
             cmd = 42;
         else if (!strcmp(command, "HALT"))
             cmd = 43;
+        else if (!strcmp(command, "JNZ"))
+            cmd = 81;
+        else if (!strcmp(command, "CONST"))
+            cmd = 82;
         else if (!strcmp(command, "="))
             sc_memorySet(intstr, operand);
         else if (atoi(command) || command[0] == '0')
@@ -85,13 +89,13 @@ void translating(char *filename)
     if (!flg)
         sc_memorySave(filename);
     if (flg == 1)
-        fprintf(stderr, "line %d: expected num of line\n", ++i);
+        fprintf(stderr, "line %d: expected num of line\n", i);
     if (flg == 2)
-        fprintf(stderr, "line %d: wrong command\n", ++i);
+        fprintf(stderr, "line %d: wrong command\n", i);
     if (flg == 3)
-        fprintf(stderr, "line %d: wrong operand\n", ++i);
+        fprintf(stderr, "line %d: wrong operand\n", i);
     if (flg == 4)
-        fprintf(stderr, "line %d: wrong command or operand\n", ++i);
+        fprintf(stderr, "line %d: wrong command or operand\n", i);
 }
 
 int main(int argc, char **argv)
@@ -104,5 +108,6 @@ int main(int argc, char **argv)
     sc_memoryInit();
     load_file(argv[1]);
     translating(argv[2]);
+    printf("Success\n");
     return 0;
 }

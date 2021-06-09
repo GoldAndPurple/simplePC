@@ -115,8 +115,9 @@ int CU()
                 }
                 break;
             case coms::WRITE:
+                printf("WRITE:\n");
                 sc_memoryGet(op, &t);
-                printf("\n%d", t);
+                printf("\t%d\n", t);
                 counter++;
                 break;
             case coms::LOAD:
@@ -151,12 +152,27 @@ int CU()
                     counter++;
                 }
                 break;
+            case coms::JNZ:
+                if (accumulator == 0)
+                {
+                    counter++;
+                }
+                else
+                {
+                    counter = op;
+                }
+                break;
             case coms::HALT:
                 sc_regSet(IC, 1);
                 break;
             case coms::MOVR:
                 sc_memoryGet(accumulator, &t);
                 sc_memorySet(op, t);
+                counter++;
+                break;
+            case coms::CONST:
+                sc_memorySet(99, op);
+                counter++;
                 break;
             default:
                 sc_regSet(EC, 1);
@@ -177,11 +193,11 @@ void print_memory()
     mt_gotoXY(2, 65);
     printf("accumulator");
     mt_gotoXY(3, 65);
-    printf("+%04d", accumulator);
+    printf("%+04d", accumulator);
     mt_gotoXY(5, 65);
     printf("instructionCounter");
     mt_gotoXY(6, 65);
-    printf("+%04d", counter);
+    printf("%+04d", counter);
     mt_gotoXY(8, 65);
     printf("operation");
     mt_gotoXY(9, 65);
@@ -204,13 +220,13 @@ void print_memory()
             mt_gotoXY((i / 10) + 3, 2);
         }
         sc_memoryGet(i, &temp);
-        if (temp < 0)
+        if (temp > 9999)
         {
-            printf("%05d ", temp);
+            printf("+%04x ", temp);
         }
         else
         {
-            printf("+%04d ", temp);
+            printf("%+05d ", temp);
         }
     }
 }
@@ -308,14 +324,7 @@ void print_current_inst()
     char char_symbol[8];
 
     sc_memoryGet(cursor, &value);
-    if (value < 0)
-    {
-        sprintf(char_symbol, "%05d", value);
-    }
-    else
-    {
-        sprintf(char_symbol, "+%04d", value);
-    }
+    sprintf(char_symbol, "+%04x", value);
 
     for (int i = 0; i < 5; i++)
     {
@@ -338,8 +347,8 @@ void settimer(struct itimerval *nval)
 {
     nval->it_interval.tv_sec = 0;
     nval->it_interval.tv_usec = 0;
-    nval->it_value.tv_sec = 1;
-    nval->it_value.tv_usec = 0;
+    nval->it_value.tv_sec = 0;
+    nval->it_value.tv_usec = 100000;
 }
 
 void timer(int sig)
